@@ -197,6 +197,7 @@ class BricksEnv(SingleArmEnv):
         renderer="mujoco",
         renderer_config=None,
     ):
+
         # task settings
         self.single_object_mode = single_object_mode
         self.object_to_id = {"milk": 0, "bread": 1, "cereal": 2, "can": 3}
@@ -212,6 +213,9 @@ class BricksEnv(SingleArmEnv):
         # settings for table-top
         self.table_full_size = table_full_size
         self.table_friction = table_friction
+        self.table_offset = np.array((0, 0, 0.8))
+
+        self.placement_initializer = None
 
         # # settings for bin position
         # self.bin1_pos = np.array(bin1_pos)
@@ -286,35 +290,118 @@ class BricksEnv(SingleArmEnv):
         Loads an xml model, puts it in self.model
         """
         # TODO we overwrite self.model, but we should be able to just append to it
+        # super()._load_model()
+        #
+        # # Adjust base pose accordingly
+        # xpos = self.robots[0].robot_model.base_xpos_offset["table"]
+        # self.robots[0].robot_model.set_base_xpos(xpos)
+        #
+        # # load model for table-top workspace
+        # mujoco_arena = TableArena(
+        #     table_full_size=self.table_full_size, table_friction=self.table_friction
+        # )
+        #
+        # # Arena always gets set to zero origin
+        # mujoco_arena.set_origin([0, 0, 0])
+        #
+        # # store some arena attributes
+        #
+        # self.objects = []
+        # self.visual_objects = []
+        #
+        # # task includes arena, robot, and objects of interest
+        # # TODO change naming: this is not a task, it's a model of the environment
+        # self.model = ManipulationTask(
+        #     mujoco_arena=mujoco_arena,
+        #     mujoco_robots=[robot.robot_model for robot in self.robots],
+        #     mujoco_objects=self.visual_objects + self.objects,
+        # )
+        #
+        # # Generate placement initializer
+        # self._get_placement_initializer()
+
+
+        """
+        Loads an xml model, puts it in self.model
+        """
         super()._load_model()
 
         # Adjust base pose accordingly
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"]
+        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
         self.robots[0].robot_model.set_base_xpos(xpos)
 
         # load model for table-top workspace
         mujoco_arena = TableArena(
-            table_full_size=self.table_full_size, table_friction=self.table_friction
+            table_full_size=self.table_full_size,
+            table_friction=self.table_friction,
+            table_offset=self.table_offset,
         )
 
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
 
-        # store some arena attributes
-
-        self.objects = []
-        self.visual_objects = []
+        # initialize objects of interest
+        tex_attrib = {
+            "type": "cube",
+        }
+        mat_attrib = {
+            "texrepeat": "1 1",
+            "specular": "0.4",
+            "shininess": "0.1",
+        }
+        # redwood = CustomMaterial(
+        #     texture="WoodRed",
+        #     tex_name="redwood",
+        #     mat_name="redwood_mat",
+        #     tex_attrib=tex_attrib,
+        #     mat_attrib=mat_attrib,
+        # )
+        # greenwood = CustomMaterial(
+        #     texture="WoodGreen",
+        #     tex_name="greenwood",
+        #     mat_name="greenwood_mat",
+        #     tex_attrib=tex_attrib,
+        #     mat_attrib=mat_attrib,
+        # )
+        # self.cubeA = BoxObject(
+        #     name="cubeA",
+        #     size_min=[0.02, 0.02, 0.02],
+        #     size_max=[0.02, 0.02, 0.02],
+        #     rgba=[1, 0, 0, 1],
+        #     material=redwood,
+        # )
+        # self.cubeB = BoxObject(
+        #     name="cubeB",
+        #     size_min=[0.025, 0.025, 0.025],
+        #     size_max=[0.025, 0.025, 0.025],
+        #     rgba=[0, 1, 0, 1],
+        #     material=greenwood,
+        # )
+        # cubes = [self.cubeA, self.cubeB]
+        cubes = []
+        # Create placement initializer
+        if self.placement_initializer is not None:
+            self.placement_initializer.reset()
+            self.placement_initializer.add_objects(cubes)
+        else:
+            self.placement_initializer = UniformRandomSampler(
+                name="ObjectSampler",
+                mujoco_objects=cubes,
+                x_range=[-0.08, 0.08],
+                y_range=[-0.08, 0.08],
+                rotation=None,
+                ensure_object_boundary_in_range=False,
+                ensure_valid_placement=True,
+                reference_pos=self.table_offset,
+                z_offset=0.01,
+            )
 
         # task includes arena, robot, and objects of interest
-        # TODO change naming: this is not a task, it's a model of the environment
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
-            mujoco_objects=self.visual_objects + self.objects,
+            mujoco_objects=cubes,
         )
-
-        # Generate placement initializer
-        self._get_placement_initializer()
 
     def _setup_references(self):
         """
@@ -329,9 +416,9 @@ class BricksEnv(SingleArmEnv):
         self.obj_geom_id = {}
 
         # object-specific ids
-        for obj in self.visual_objects + self.objects:
-            self.obj_body_id[obj.name] = self.sim.model.body_name2id(obj.root_body)
-            self.obj_geom_id[obj.name] = [self.sim.model.geom_name2id(g) for g in obj.contact_geoms]
+        # for obj in self.visual_objects + self.objects:
+        #     self.obj_body_id[obj.name] = self.sim.model.body_name2id(obj.root_body)
+        #     self.obj_geom_id[obj.name] = [self.sim.model.geom_name2id(g) for g in obj.contact_geoms]
 
     def _reset_internal(self):
         """
