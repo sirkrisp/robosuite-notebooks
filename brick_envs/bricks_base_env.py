@@ -114,6 +114,44 @@ class BricksBaseEnv(SingleArmEnv):
         for i in range(step + 1):
             self._assemble_bricks(self.instructions[i])
 
+    def get_keyframe_data(
+            self,
+            img_resolution: tuple[int, int] = (300, 300),
+            camera_name: str = "frontview",
+            use_depth: bool = False
+    ):
+        images = []
+        points = []
+        trajectory_points = []
+
+        # get image and points of scene before any instructions are executed
+        keyframe_depth = None
+        # TODO use sensor, check that sensor is correct
+
+        keyframe = self.sim.render(*img_resolution, camera_name=camera_name, depth=use_depth)
+
+        for instruction in self.instructions:
+            moving_brick = self.bricks[instruction.brick_2_idx]
+
+            # get first pos of moving_brick before assembly
+            trajectory_point_1 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
+            trajectory_point_1[2] += moving_brick.size_z_half
+
+            self._assemble_bricks(instruction)
+
+            # get second pos of moving_brick after assembly
+            trajectory_point_2 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
+            trajectory_point_2[2] += moving_brick.size_z_half
+            trajectory_points.append([trajectory_point_1, trajectory_point_2])
+
+            # get image and points of scene after assembly
+
+        return {
+            "images": images,
+            "points": points,
+            "trajectory_points": trajectory_points,
+        }
+
     def _load_model(self):
         """
         Load robot and table into the world.
