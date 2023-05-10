@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from robosuite.models.objects import BoxObject, CompositeObject
+from robosuite.models.objects import CompositeObject
 import numpy as np
+
+from bricks_dataset.brick_objects.brick_colors import hsl_to_rgba, hsl_change_brightness
 
 
 class BrickObj(CompositeObject):
@@ -9,18 +11,19 @@ class BrickObj(CompositeObject):
     def __init__(
             self,
             name: str,
-            color=(1, 0, 0, 1),
+            hsl=(204, 8, 76),
             num_segments_y=1,
             num_segments_x=1,
             num_segments_z=1,
-            segment_height=0.02,
-            segment_size=0.02,
+            segment_height=0.025,
+            segment_size=0.025,
             show_orientation=True,
             **kwargs
     ):
         self.num_segments_y = num_segments_y
         self.num_segments_x = num_segments_x
         self.num_segments_z = num_segments_z
+        self.show_orientation = show_orientation
 
         # self.segment_height_half = segment_height / 2
         self.segment_size_half = segment_size / 2
@@ -30,11 +33,6 @@ class BrickObj(CompositeObject):
         self.size_z_half = num_segments_z * segment_height / 2
 
         orient_depth_half = segment_size / 2 / 2
-
-        color_dark_factor = 0.5 if show_orientation else 1
-        color_brightness_factor = 4 if show_orientation else 1
-        color_dark = (color_dark_factor * np.array(color[:3])).tolist() + [1]
-        color_bright = (color_brightness_factor * np.array(color[:3])).tolist() + [1]
 
         super().__init__(
             name=name,
@@ -47,7 +45,7 @@ class BrickObj(CompositeObject):
                 [self.size_x_half, orient_depth_half, self.size_z_half],
                 [orient_depth_half, self.size_y_half - orient_depth_half, self.size_z_half]
             ],
-            geom_rgbas=[color, color_bright, color_dark],
+            geom_rgbas=self._get_colors(hsl),
             geom_locations=[
                 (orient_depth_half, orient_depth_half, 0),
                 (0, -self.size_y_half + orient_depth_half, 0),
@@ -56,12 +54,34 @@ class BrickObj(CompositeObject):
             **kwargs
         )
 
+    def _get_colors(self, hsl):
+        l_dark = 0.75 if self.show_orientation else 1
+        l_bright = 1.25 if self.show_orientation else 1
+        hsl_dark = hsl_change_brightness(hsl, l_dark)
+        hsl_bright = hsl_change_brightness(hsl, l_bright)
+        return list(map(hsl_to_rgba, [hsl, hsl_bright, hsl_dark]))
+
+    def set_hsl(self, hsl: tuple[int, int, int]):
+        colors = self._get_colors(hsl)
+        for i in range(3):
+            self.geom_rgbas[i] = colors[i]
+        # Lastly, parse XML tree appropriately
+        self._obj = self._get_object_subtree()
+        # Extract the appropriate private attributes for this
+        self._get_object_properties()
+
     def get_pin_pos_local(self, pin_type: str, pin_idx: int | tuple[int, int]):
         if isinstance(pin_idx, tuple):
             pin_idx_x, pin_idx_y = pin_idx
         else:
-            pin_idx_y = pin_idx
-            pin_idx_x = 0
+            if self.num_segments_x == 1:
+                pin_idx_y = pin_idx
+                pin_idx_x = 0
+            elif self.num_segments_y == 1:
+                pin_idx_y = 0
+                pin_idx_x = pin_idx
+            else:
+                raise ValueError("Invalid pin index")
         assert 0 <= pin_idx_y < self.num_segments_y, "Invalid pin index y"
         assert 0 <= pin_idx_x < self.num_segments_x, "Invalid pin index x"
 

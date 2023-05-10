@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import abstractmethod, ABCMeta
+from abc import abstractmethod
 from dataclasses import dataclass
 
 import yaml
@@ -13,8 +13,9 @@ from robosuite.models.arenas import TableArena
 from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.placement_samplers import UniformRandomSampler
 
-from brick_envs.brick_assembly_instruction import BrickAssemblyInstruction
-from brick_objects.brick_obj import BrickObj
+from bricks_dataset.brick_envs.brick_assembly_instruction import BrickAssemblyInstruction
+from bricks_dataset.brick_objects.brick_obj import BrickObj
+from bricks_dataset.brick_objects.brick_colors import hsl_colors
 
 config_path_default = os.path.join(os.path.dirname(__file__), "configs/bricks_base_env_config.yaml")
 
@@ -40,6 +41,10 @@ class BricksBaseEnv(SingleArmEnv):
 
         # we need to load bricks before we call super().__init__(...) because parent initializer calls _load_model()
         self.bricks: list[BrickObj] = self._create_bricks()
+        self.num_bricks = len(self.bricks)
+        assert self.num_bricks <= 14
+        # randomly assign colors to bricks
+        self._set_brick_colors()
         # brick placements is initialized when _reset_internal() is called
         self.brick_placements: dict[str, np.ndarray] | None = None
 
@@ -72,6 +77,12 @@ class BricksBaseEnv(SingleArmEnv):
     @abstractmethod
     def _create_instructions(self) -> list[BrickAssemblyInstruction]:
         pass
+
+    def _set_brick_colors(self):
+        hsl_color_vec = np.array(list(hsl_colors.values()))
+        colors = hsl_color_vec[np.random.choice(range(hsl_color_vec.shape[0]), self.num_bricks, replace=False)]
+        for i in range(self.num_bricks):
+            self.bricks[i].set_hsl(colors[i])
 
     def _assemble_bricks(
             self,
@@ -118,17 +129,18 @@ class BricksBaseEnv(SingleArmEnv):
             self,
             img_resolution: tuple[int, int] = (300, 300),
             camera_name: str = "frontview",
-            use_depth: bool = False
     ):
         images = []
-        points = []
+        depths = []
         trajectory_points = []
 
         # get image and points of scene before any instructions are executed
         keyframe_depth = None
         # TODO use sensor, check that sensor is correct
 
-        keyframe = self.sim.render(*img_resolution, camera_name=camera_name, depth=use_depth)
+        img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+        images.append(img)
+        depths.append(depth)
 
         for instruction in self.instructions:
             moving_brick = self.bricks[instruction.brick_2_idx]
@@ -144,11 +156,14 @@ class BricksBaseEnv(SingleArmEnv):
             trajectory_point_2[2] += moving_brick.size_z_half
             trajectory_points.append([trajectory_point_1, trajectory_point_2])
 
-            # get image and points of scene after assembly
+            # get image and depths of scene after assembly
+            img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+            images.append(img)
+            depths.append(depth)
 
         return {
             "images": images,
-            "points": points,
+            "depths": depths,
             "trajectory_points": trajectory_points,
         }
 
@@ -187,6 +202,8 @@ class BricksBaseEnv(SingleArmEnv):
         Resets simulation internal configurations.
         """
         super()._reset_internal()
+
+        self._set_brick_colors()
 
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
         if not self.deterministic_reset:
