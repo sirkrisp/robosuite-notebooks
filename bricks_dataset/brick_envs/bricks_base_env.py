@@ -43,8 +43,6 @@ class BricksBaseEnv(SingleArmEnv):
         self.bricks: list[BrickObj] = self._create_bricks()
         self.num_bricks = len(self.bricks)
         assert self.num_bricks <= 14
-        # randomly assign colors to bricks
-        self._set_brick_colors()
         # brick placements is initialized when _reset_internal() is called
         self.brick_placements: dict[str, np.ndarray] | None = None
 
@@ -78,11 +76,14 @@ class BricksBaseEnv(SingleArmEnv):
     def _create_instructions(self) -> list[BrickAssemblyInstruction]:
         pass
 
-    def _set_brick_colors(self):
-        hsl_color_vec = np.array(list(hsl_colors.values()))
-        colors = hsl_color_vec[np.random.choice(range(hsl_color_vec.shape[0]), self.num_bricks, replace=False)]
+    def set_brick_colors(self, hsl_color_keys: list[str]):
+        hsl_selected_colors = [hsl_colors[key] for key in hsl_color_keys]
         for i in range(self.num_bricks):
-            self.bricks[i].set_hsl(colors[i])
+            self.bricks[i].set_hsl(hsl_selected_colors[i])
+
+    def get_random_brick_colors(self):
+        hsl_color_keys = np.array(list(hsl_colors.keys()))
+        return hsl_color_keys[np.random.choice(range(hsl_color_keys.shape[0]), self.num_bricks, replace=False)].tolist()
 
     def _assemble_bricks(
             self,
@@ -104,7 +105,13 @@ class BricksBaseEnv(SingleArmEnv):
 
         # compute new position for brick 2
         r_1_local = brick_1.get_pin_pos_local("top", instruction.pin_1)
+
+        # TODO do we have to multiply with -1 because of inverse later?
+        r_1_local[0] *= -1
+        r_1_local[1] *= -1
         r_2_local = brick_2.get_pin_pos_local("bottom", instruction.pin_2)
+        r_2_local[0] *= -1
+        r_2_local[1] *= -1
 
         # TODO why inverse?
         r_1_world = q_1.inverse.rotate(r_1_local)
@@ -129,27 +136,30 @@ class BricksBaseEnv(SingleArmEnv):
             self,
             img_resolution: tuple[int, int] = (300, 300),
             camera_name: str = "frontview",
+            use_depth: bool = False,
     ):
         images = []
         depths = []
         trajectory_points = []
 
         # get image and points of scene before any instructions are executed
-        keyframe_depth = None
         # TODO use sensor, check that sensor is correct
 
-        img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+        if use_depth:
+            img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+            depths.append(depth)
+        else:
+            img = self.sim.render(*img_resolution, camera_name=camera_name)
         images.append(img)
-        depths.append(depth)
 
-        for instruction in self.instructions:
+        for i, instruction in enumerate(self.instructions):
             moving_brick = self.bricks[instruction.brick_2_idx]
 
             # get first pos of moving_brick before assembly
             trajectory_point_1 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
             trajectory_point_1[2] += moving_brick.size_z_half
 
-            self._assemble_bricks(instruction)
+            self.go_to_step(i)
 
             # get second pos of moving_brick after assembly
             trajectory_point_2 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
@@ -157,9 +167,12 @@ class BricksBaseEnv(SingleArmEnv):
             trajectory_points.append([trajectory_point_1, trajectory_point_2])
 
             # get image and depths of scene after assembly
-            img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+            if use_depth:
+                img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+                depths.append(depth)
+            else:
+                img = self.sim.render(*img_resolution, camera_name=camera_name)
             images.append(img)
-            depths.append(depth)
 
         return {
             "images": images,
@@ -203,7 +216,7 @@ class BricksBaseEnv(SingleArmEnv):
         """
         super()._reset_internal()
 
-        self._set_brick_colors()
+        # self._set_brick_colors()
 
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
         if not self.deterministic_reset:

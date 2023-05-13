@@ -70,7 +70,7 @@ class BrickObj(CompositeObject):
         # Extract the appropriate private attributes for this
         self._get_object_properties()
 
-    def get_pin_pos_local(self, pin_type: str, pin_idx: int | tuple[int, int]):
+    def pin_idx_to_pin_tuple(self, pin_idx: int | tuple[int, int]):
         if isinstance(pin_idx, tuple):
             pin_idx_x, pin_idx_y = pin_idx
         else:
@@ -84,7 +84,10 @@ class BrickObj(CompositeObject):
                 raise ValueError("Invalid pin index")
         assert 0 <= pin_idx_y < self.num_segments_y, "Invalid pin index y"
         assert 0 <= pin_idx_x < self.num_segments_x, "Invalid pin index x"
+        return pin_idx_x, pin_idx_y
 
+    def get_pin_pos_local(self, pin_type: str, pin_idx: int | tuple[int, int]):
+        pin_idx_x, pin_idx_y = self.pin_idx_to_pin_tuple(pin_idx)
         pin_z_offset = self.size_z_half
         if pin_type == "bottom":
             pin_z_offset *= -1
