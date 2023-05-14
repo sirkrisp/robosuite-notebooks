@@ -112,4 +112,5 @@ mjkey.txt
 .idea
 
 .pytest_cache/
-/datagen/keyframes_1/
+/datagen/keyframes_2/
+/datagen/keyframes**/
