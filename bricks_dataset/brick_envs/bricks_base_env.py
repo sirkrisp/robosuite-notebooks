@@ -68,6 +68,24 @@ class BricksBaseEnv(SingleArmEnv):
         self.instructions: list[BrickAssemblyInstruction] = self._create_instructions()
         self.num_instructions = len(self.instructions)
 
+        # move camera to focus on table
+        self._adjust_frontview_camera()
+        self._adjust_birdview_camera()
+
+    def _adjust_frontview_camera(self):
+        cam_pos = np.array([0.9, 0, 1.7])
+        qx = Quaternion(axis=[1, 0, 0], angle=40/360*2*np.pi)
+        qy = Quaternion(axis=[0, 0, 1], angle=90/360*2*np.pi)
+        cam_quat = qy * qx
+        self.move_camera("frontview", cam_pos, cam_quat)
+
+    def _adjust_birdview_camera(self):
+        cam_pos = np.array([0.2, 0, 1.9])
+        qx = Quaternion(axis=[1, 0, 0], angle=0/360*2*np.pi)
+        qy = Quaternion(axis=[0, 0, 1], angle=90/360*2*np.pi)
+        cam_quat = qy * qx
+        self.move_camera("birdview", cam_pos, cam_quat)
+
     @abstractmethod
     def _create_bricks(self) -> list[BrickObj]:
         pass
@@ -80,6 +98,13 @@ class BricksBaseEnv(SingleArmEnv):
         hsl_selected_colors = [hsl_colors[key] for key in hsl_color_keys]
         for i in range(self.num_bricks):
             self.bricks[i].set_hsl(hsl_selected_colors[i])
+
+    def move_camera(self, camera_name, pos, quat: Quaternion):
+        cam_id = self.sim.model.camera_name2id(camera_name)
+        cam = self.sim.model.camera(cam_id)
+        cam.pos = pos
+        cam.quat = quat.elements
+        self.sim.forward()
 
     def get_random_brick_colors(self):
         hsl_color_keys = np.array(list(hsl_colors.keys()))
@@ -230,6 +255,9 @@ class BricksBaseEnv(SingleArmEnv):
                 qpos = np.concatenate([np.array(obj_pos), np.array(obj_quat)])
                 self.brick_placements[obj.joints[0]] = qpos
                 self.sim.data.set_joint_qpos(obj.joints[0], qpos)
+
+            self._adjust_frontview_camera()
+            self._adjust_birdview_camera()
 
     def reward(self, action=None):
         # We do not need any reward function for this environment

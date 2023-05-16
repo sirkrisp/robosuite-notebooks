@@ -3,6 +3,8 @@ from bricks_dataset.brick_envs.brick_assembly_instruction import BrickAssemblyIn
 
 
 def generate_pin_sizes(num_blocks: int, total_num_pins: int):
+    if total_num_pins < num_blocks:
+        return np.ones(num_blocks, dtype=int)
     pin_separators = np.random.choice(np.arange(total_num_pins - 1), size=num_blocks, replace=False)
     pin_separators.sort()
     sizes = np.diff(np.concatenate(([0], pin_separators + 1, [total_num_pins])))

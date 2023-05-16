@@ -32,24 +32,55 @@ class BrickObj(CompositeObject):
         self.size_y_half = num_segments_y * segment_size / 2
         self.size_z_half = num_segments_z * segment_height / 2
 
+        rgba, rgba_bright, rgba_dark = self._get_colors(hsl)
+
         orient_depth_half = segment_size / 2 / 2
+
+        total_num_pins = num_segments_x * num_segments_y
+        pin_half_sizes = [[segment_size / 2, segment_size / 2, segment_height / 2 * 0.1] for _ in range(total_num_pins)]
+        pin_locations = []
+        pin_z_half = segment_height / 2 * 0.1
+        for i in range(num_segments_x):
+            for j in range(num_segments_y):
+                pin_locations.append(
+                    [
+                        -self.size_x_half + segment_size / 2 + i * segment_size,
+                        -self.size_y_half + segment_size / 2 + j * segment_size,
+                        self.size_z_half - pin_z_half
+                    ]
+                )
+        pin_colors = self._get_pin_colors(hsl)
+
+        # orientation_marker
+        orientation_marker_half_size = [segment_size / 2, segment_size / 4, segment_height / 2 * 0.1]
+        orientation_marker_location = pin_locations[0][:]  # copy
+        orientation_marker_location[1] -= segment_size / 4
+        orientation_marker_rgba = [1, 0, 0, 1]
+
+        # adjust first pin for orientation marker
+        pin_half_sizes[0][1] = orientation_marker_half_size[1]  # adjust y for orientation marker
+        pin_locations[0][1] += segment_size / 4  # adjust y for orientation marker
 
         super().__init__(
             name=name,
             density=200,
             total_size=[self.size_x_half, self.size_y_half, self.size_z_half],
             locations_relative_to_center=True,
-            geom_types=["box", "box", "box"],
+            geom_types=["box", "box", "box", *(["box"] * total_num_pins), "box"],
             geom_sizes=[
-                [self.size_x_half - orient_depth_half, self.size_y_half - orient_depth_half, self.size_z_half],
-                [self.size_x_half, orient_depth_half, self.size_z_half],
-                [orient_depth_half, self.size_y_half - orient_depth_half, self.size_z_half]
+                [self.size_x_half - orient_depth_half, self.size_y_half - orient_depth_half, self.size_z_half - pin_z_half],
+                [self.size_x_half, orient_depth_half, self.size_z_half - pin_z_half],
+                [orient_depth_half, self.size_y_half - orient_depth_half, self.size_z_half - pin_z_half],
+                *pin_half_sizes,
+                orientation_marker_half_size
             ],
-            geom_rgbas=self._get_colors(hsl),
+            geom_rgbas=[rgba, rgba, rgba, *pin_colors, orientation_marker_rgba],
             geom_locations=[
-                (orient_depth_half, orient_depth_half, 0),
-                (0, -self.size_y_half + orient_depth_half, 0),
-                (-self.size_x_half + orient_depth_half, orient_depth_half, 0)
+                (orient_depth_half, orient_depth_half, -pin_z_half),
+                (0, -self.size_y_half + orient_depth_half, -pin_z_half),
+                (-self.size_x_half + orient_depth_half, orient_depth_half, -pin_z_half),
+                *pin_locations,
+                orientation_marker_location,
             ],
             **kwargs
         )
@@ -61,10 +92,19 @@ class BrickObj(CompositeObject):
         hsl_bright = hsl_change_brightness(hsl, l_bright)
         return list(map(hsl_to_rgba, [hsl, hsl_bright, hsl_dark]))
 
+    def _get_pin_colors(self, hsl):
+        colors = self._get_colors(hsl)
+        pin_colors = [colors[1] if (i + j) % 2 == 0 else colors[2] for i in range(self.num_segments_y) for j in
+                      range(self.num_segments_x)]
+        # pin_colors[0] = self._get_first_pin_color(hsl)
+        return pin_colors
+
     def set_hsl(self, hsl: tuple[int, int, int]):
         colors = self._get_colors(hsl)
-        for i in range(3):
-            self.geom_rgbas[i] = colors[i]
+        pin_colors = self._get_pin_colors(hsl)
+        box_colors = [colors[0], colors[0], colors[0], *pin_colors]  # *colors
+        for i in range(len(box_colors)):
+            self.geom_rgbas[i] = box_colors[i]
         # Lastly, parse XML tree appropriately
         self._obj = self._get_object_subtree()
         # Extract the appropriate private attributes for this
