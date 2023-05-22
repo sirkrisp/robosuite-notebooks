@@ -15,7 +15,7 @@ from datagen.datagen_utils import NpEncoder
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_6")
+    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_10")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     base_shape = (4, 4)
 
     # sample params
-    total_num_env_samples = 10000
+    total_num_env_samples = 1000
     num_colors_per_env = 1
 
     # total_num_instructions = 0

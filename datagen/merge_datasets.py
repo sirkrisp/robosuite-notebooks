@@ -29,13 +29,15 @@ def merge_dataset_info_1_into_info_2(info_1, info_2, prefix=""):
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_4")
+    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_merged_5_7_8_9")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     dataset_folders = [
-        os.path.join(os.path.dirname(__file__), "keyframes_1"),
-        os.path.join(os.path.dirname(__file__), "keyframes_3"),
+        os.path.join(os.path.dirname(__file__), "keyframes_5"),
+        os.path.join(os.path.dirname(__file__), "keyframes_7"),
+        os.path.join(os.path.dirname(__file__), "keyframes_8"),
+        os.path.join(os.path.dirname(__file__), "keyframes_9"),
     ]
 
     infos = []
