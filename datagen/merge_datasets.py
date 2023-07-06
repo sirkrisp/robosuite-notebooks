@@ -29,17 +29,18 @@ def merge_dataset_info_1_into_info_2(info_1, info_2, prefix=""):
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_merged_5_7_8_9")
+    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_03_04")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     dataset_folders = [
-        os.path.join(os.path.dirname(__file__), "keyframes_5"),
-        os.path.join(os.path.dirname(__file__), "keyframes_7"),
-        os.path.join(os.path.dirname(__file__), "keyframes_8"),
-        os.path.join(os.path.dirname(__file__), "keyframes_9"),
+        os.path.join(os.path.dirname(__file__), "clip_data_03_seg"),
+        os.path.join(os.path.dirname(__file__), "clip_data_04_seg_numBricks=7"),
+        # os.path.join(os.path.dirname(__file__), "keyframes_8"),
+        # os.path.join(os.path.dirname(__file__), "keyframes_9"),
     ]
 
+    # TODO merged info should have array of configs
     infos = []
     images = []
     total_num_images = 0

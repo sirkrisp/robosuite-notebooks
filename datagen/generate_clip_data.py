@@ -15,7 +15,7 @@ from datagen.datagen_utils import NpEncoder
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "keyframes_10")
+    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_04_seg_numBricks=7")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -33,13 +33,15 @@ if __name__ == "__main__":
     # envs = []
 
     # generative env params
-    num_bricks = 6  # does not include base brick
-    total_num_pins = (1, 24, 1)
+    num_bricks = 7  # does not include base brick
+    total_num_pins = (1, 27, 1) # NOTE there will will be binom(27-1, 6-1) = 65780 possible brick combinations
     base_shape = (4, 4)
+    show_segments = True
 
     # sample params
     total_num_env_samples = 1000
-    num_colors_per_env = 1
+    num_colors_per_env = 1 # corresponds to num samples per task env
+    sample_colors = False
 
     # total_num_instructions = 0
     # for i in range(len(tasks)):
@@ -69,17 +71,25 @@ if __name__ == "__main__":
         "max_orientation": 4,
         "color_keys": list(hsl_colors.keys()),
         "img_res": img_res,
-        "total_num_images": total_num_images
+        "total_num_images": total_num_images,
+        
+        # sample params
+        "sample_colors": sample_colors,       
+        # generative env params
+        "show_segments": show_segments,
+        "base_shape": base_shape,
+        "total_num_pins": total_num_pins,
+        "num_bricks": num_bricks,  # does not include base brick 
     }
 
     keyframes_start_index = 0
     for i in tqdm.tqdm(range(total_num_env_samples)):
-        # TODO initialize generative env
+        # initialize generative env
         # env = ALL_BRICK_ENVIRONMENTS[tasks[i]]()
         env = None
         while True:
             try:
-                env = GenerativeEnv(num_bricks, total_num_pins, base_shape)
+                env = GenerativeEnv(num_bricks, total_num_pins, base_shape, show_segments=show_segments)
                 break
             except:
                 continue
@@ -99,10 +109,21 @@ if __name__ == "__main__":
                 "pin_2_y": pin_2_y,
                 "orientation": instruction.o,
             })
+        bricks = []
+        for brick in env.bricks:
+            bricks.append({
+                "num_segments_x": brick.num_segments_x,
+                "num_segments_y": brick.num_segments_y,
+                "num_segments_z": brick.num_segments_z,
+                "size_x_half": brick.size_x_half,
+                "size_y_half": brick.size_y_half,
+                "size_z_half": brick.size_z_half,
+                # "color": TODO check if brick has default color
+            })
         samples = []
         for c in range(num_colors_per_env):
             # sample color
-            brick_colors = env.get_random_brick_colors()
+            brick_colors = ["custom_blue_grey" for _ in range(num_bricks + 1)] if not sample_colors else env.get_random_brick_colors()
             samples.append({
                 "brick_colors": brick_colors,
                 "keyframes_start_index": keyframes_start_index
@@ -116,7 +137,7 @@ if __name__ == "__main__":
                 except:
                     pass
             # sample keyframe data
-            keyframe_data = env.get_keyframe_data(img_resolution=(img_res[0], img_res[1]), camera_name="birdview")
+            keyframe_data = env.get_keyframe_data(img_resolution=(img_res[0], img_res[1]), camera_name="frontview")
             # save task_data
             images[keyframes_start_index:keyframes_start_index + num_instructions + 1] = \
                 np.moveaxis(keyframe_data['images'], 3, 1).astype(np.uint8)
@@ -128,6 +149,7 @@ if __name__ == "__main__":
         info["tasks"][task_name] = {
             "samples": samples,
             "instructions": instructions,
+            "bricks": bricks,
             "brick_shapes": env.brick_shapes,  # {k: env.brick_shapes[k] for k in env.brick_shapes.keys()},
         }
         env.close()

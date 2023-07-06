@@ -17,13 +17,13 @@ class BrickObj(CompositeObject):
             num_segments_z=1,
             segment_height=0.025,
             segment_size=0.025,
-            show_orientation=True,
+            show_segments=True,
             **kwargs
     ):
         self.num_segments_y = num_segments_y
         self.num_segments_x = num_segments_x
         self.num_segments_z = num_segments_z
-        self.show_orientation = show_orientation
+        self.show_segments = show_segments
 
         # self.segment_height_half = segment_height / 2
         self.segment_size_half = segment_size / 2
@@ -55,7 +55,7 @@ class BrickObj(CompositeObject):
         orientation_marker_half_size = [segment_size / 2, segment_size / 4, segment_height / 2 * 0.1]
         orientation_marker_location = pin_locations[0][:]  # copy
         orientation_marker_location[1] -= segment_size / 4
-        orientation_marker_rgba = [1, 0, 0, 1]
+        orientation_marker_rgba = pin_colors[0] # [1, 0, 0, 1]
 
         # adjust first pin for orientation marker
         pin_half_sizes[0][1] = orientation_marker_half_size[1]  # adjust y for orientation marker
@@ -86,23 +86,23 @@ class BrickObj(CompositeObject):
         )
 
     def _get_colors(self, hsl):
-        l_dark = 0.75 if self.show_orientation else 1
-        l_bright = 1.25 if self.show_orientation else 1
+        l_dark = 0.75 if self.show_segments else 1
+        l_bright = 1.25 if self.show_segments else 1
         hsl_dark = hsl_change_brightness(hsl, l_dark)
         hsl_bright = hsl_change_brightness(hsl, l_bright)
         return list(map(hsl_to_rgba, [hsl, hsl_bright, hsl_dark]))
 
     def _get_pin_colors(self, hsl):
         colors = self._get_colors(hsl)
-        pin_colors = [colors[1] if (i + j) % 2 == 0 else colors[2] for i in range(self.num_segments_y) for j in
-                      range(self.num_segments_x)]
+        pin_colors = [colors[1] if (i + j) % 2 == 0 else colors[2] for i in range(self.num_segments_x) for j in
+                      range(self.num_segments_y)]
         # pin_colors[0] = self._get_first_pin_color(hsl)
         return pin_colors
 
     def set_hsl(self, hsl: tuple[int, int, int]):
         colors = self._get_colors(hsl)
         pin_colors = self._get_pin_colors(hsl)
-        box_colors = [colors[0], colors[0], colors[0], *pin_colors]  # *colors
+        box_colors = [colors[0], colors[0], colors[0], *pin_colors, pin_colors[0]]  # *colors
         for i in range(len(box_colors)):
             self.geom_rgbas[i] = box_colors[i]
         # Lastly, parse XML tree appropriately

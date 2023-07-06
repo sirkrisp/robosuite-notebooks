@@ -16,6 +16,8 @@ hsl_colors = {
     'flat_dark_orange': (28, 80, 52),
     'flat_brown': (24, 100, 41),
 
+    'custom_blue_grey': (204, 8, 76),
+
     'flat_blue_brown': (210, 15, 43),
     'material_brown': (16, 25, 38),
     'material_pink': (340, 82, 52),
@@ -23,7 +25,8 @@ hsl_colors = {
     'web_safe_green': (135, 100, 40),
     'web_safe_muddy_brown_green': (60, 33, 30),
     'web_safe_muddy_green': (90, 50, 40),
-    'web_safe_muddy_orange': (20, 60, 50)
+    'web_safe_muddy_orange': (20, 60, 50),
+
 
 }
 

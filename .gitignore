@@ -114,3 +114,4 @@ mjkey.txt
 .pytest_cache/
 /datagen/keyframes_2/
 /datagen/keyframes**/
+/datagen/clip_data**/
