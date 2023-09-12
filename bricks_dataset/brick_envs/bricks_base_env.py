@@ -40,33 +40,17 @@ class BricksBaseEnv(SingleArmEnv):
         self.table_config = TableConfig(**self.config["bricks_base_env_config"]["table"])
 
         # we need to load bricks before we call super().__init__(...) because parent initializer calls _load_model()
-        self.bricks: list[BrickObj] = self._create_bricks()
-        self.num_bricks = len(self.bricks)
-        assert self.num_bricks <= 14
-        # brick placements is initialized when _reset_internal() is called
-        self.brick_placements: dict[str, np.ndarray] | None = None
-
-        # Create placement initializer
-        table_full_size = self.table_config.full_size
-        self.placement_initializer = UniformRandomSampler(
-            name="BricksSampler",
-            mujoco_objects=self.bricks,
-            x_range=[0, table_full_size[0] / 2],
-            y_range=[-table_full_size[1] / 2, table_full_size[1] / 2],
-            rotation=None,
-            ensure_object_boundary_in_range=True,
-            ensure_valid_placement=True,
-            reference_pos=self.table_config.offset,
-            z_offset=0.01,
-        )
+        self.setup_bricks()
+        self.mujoco_arena = None
 
         super().__init__(**self.config["single_arm_env_config"])
 
+        # TODO why reset and not _reset_internal?
+        self.hard_reset = False
         self.reset()
 
         # create instruction after bricks have been placed onto the table
-        self.instructions: list[BrickAssemblyInstruction] = self._create_instructions()
-        self.num_instructions = len(self.instructions)
+        self.setup_instructions()
 
         # move camera to focus on table
         self._adjust_frontview_camera()
@@ -93,6 +77,32 @@ class BricksBaseEnv(SingleArmEnv):
     @abstractmethod
     def _create_instructions(self) -> list[BrickAssemblyInstruction]:
         pass
+
+    def setup_bricks(self):
+        self.bricks: list[BrickObj] = self._create_bricks()
+        self.num_bricks = len(self.bricks)
+        assert self.num_bricks <= 14
+        # brick placements is initialized when _reset_internal() is called
+        self.brick_placements: dict[str, np.ndarray] | None = None
+
+        # Create placement initializer
+        table_full_size = self.table_config.full_size
+        self.placement_initializer = UniformRandomSampler(
+            name="BricksSampler",
+            mujoco_objects=self.bricks,
+            x_range=[0, table_full_size[0] / 2],
+            y_range=[-table_full_size[1] / 2, table_full_size[1] / 2],
+            rotation=None,
+            ensure_object_boundary_in_range=True,
+            ensure_valid_placement=True,
+            reference_pos=self.table_config.offset,
+            z_offset=0.01,
+        )
+
+    def setup_instructions(self):
+        # create instruction after bricks have been placed onto the table
+        self.instructions: list[BrickAssemblyInstruction] = self._create_instructions()
+        self.num_instructions = len(self.instructions)
 
     def set_brick_colors(self, hsl_color_keys: list[str]):
         hsl_selected_colors = [hsl_colors[key] for key in hsl_color_keys]
@@ -149,19 +159,25 @@ class BricksBaseEnv(SingleArmEnv):
         self.sim.forward()
 
     def go_to_step(self, step: int):
-        assert 0 <= step < self.num_instructions
+        """
+        Args:
+            step: if step = -1 go to initial step, if step = 0 go to first instruction, etc.
+        """
+        assert -1 <= step < self.num_instructions
         if self.brick_placements is None:
             self._reset_internal()
         for k in self.brick_placements.keys():
             self.sim.data.set_joint_qpos(k, self.brick_placements[k])
         for i in range(step + 1):
             self._assemble_bricks(self.instructions[i])
+        self.sim.forward()
 
     def get_keyframe_data(
             self,
             img_resolution: tuple[int, int] = (300, 300),
             camera_name: str = "frontview",
             use_depth: bool = False,
+            only_initial=False,
     ):
         images = []
         depths = []
@@ -170,6 +186,8 @@ class BricksBaseEnv(SingleArmEnv):
         # get image and points of scene before any instructions are executed
         # TODO use sensor, check that sensor is correct
 
+        self.go_to_step(-1)  # reset to initial state
+
         if use_depth:
             img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
             depths.append(depth)
@@ -177,27 +195,28 @@ class BricksBaseEnv(SingleArmEnv):
             img = self.sim.render(*img_resolution, camera_name=camera_name)
         images.append(img)
 
-        for i, instruction in enumerate(self.instructions):
-            moving_brick = self.bricks[instruction.brick_2_idx]
+        if not only_initial:
+            for i, instruction in enumerate(self.instructions):
+                moving_brick = self.bricks[instruction.brick_2_idx]
 
-            # get first pos of moving_brick before assembly
-            trajectory_point_1 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
-            trajectory_point_1[2] += moving_brick.size_z_half
+                # get first pos of moving_brick before assembly
+                trajectory_point_1 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
+                trajectory_point_1[2] += moving_brick.size_z_half
 
-            self.go_to_step(i)
+                self.go_to_step(i)
 
-            # get second pos of moving_brick after assembly
-            trajectory_point_2 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
-            trajectory_point_2[2] += moving_brick.size_z_half
-            trajectory_points.append([trajectory_point_1, trajectory_point_2])
+                # get second pos of moving_brick after assembly
+                trajectory_point_2 = self.sim.data.get_joint_qpos(moving_brick.joints[0])
+                trajectory_point_2[2] += moving_brick.size_z_half
+                trajectory_points.append([trajectory_point_1, trajectory_point_2])
 
-            # get image and depths of scene after assembly
-            if use_depth:
-                img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
-                depths.append(depth)
-            else:
-                img = self.sim.render(*img_resolution, camera_name=camera_name)
-            images.append(img)
+                # get image and depths of scene after assembly
+                if use_depth:
+                    img, depth = self.sim.render(*img_resolution, camera_name=camera_name, depth=True)
+                    depths.append(depth)
+                else:
+                    img = self.sim.render(*img_resolution, camera_name=camera_name)
+                images.append(img)
 
         return {
             "images": images,
@@ -205,32 +224,33 @@ class BricksBaseEnv(SingleArmEnv):
             "trajectory_points": trajectory_points,
         }
 
-    def _load_model(self):
+    def _load_model(self, bricks_only=False):
         """
         Load robot and table into the world.
 
         Returns:
 
         """
-        super()._load_model()
+        if not bricks_only:
+            super()._load_model()
 
-        # Adjust base pose accordingly
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_config.full_size[0])
-        self.robots[0].robot_model.set_base_xpos(xpos)
+            # Adjust base pose accordingly
+            xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_config.full_size[0])
+            self.robots[0].robot_model.set_base_xpos(xpos)
 
-        # load model for table-top workspace
-        mujoco_arena = TableArena(
-            table_full_size=self.table_config.full_size,
-            table_friction=self.table_config.friction,
-            table_offset=self.table_config.offset,
-        )
+            # load model for table-top workspace
+            self.mujoco_arena = TableArena(
+                table_full_size=self.table_config.full_size,
+                table_friction=self.table_config.friction,
+                table_offset=self.table_config.offset,
+            )
 
-        # Arena always gets set to zero origin
-        mujoco_arena.set_origin([0, 0, 0])
+            # Arena always gets set to zero origin
+            self.mujoco_arena.set_origin([0, 0, 0])
 
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
-            mujoco_arena=mujoco_arena,
+            mujoco_arena=self.mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
             mujoco_objects=self.bricks,
         )

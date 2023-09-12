@@ -29,13 +29,13 @@ def merge_dataset_info_1_into_info_2(info_1, info_2, prefix=""):
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_03_04")
+    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_05_06")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     dataset_folders = [
-        os.path.join(os.path.dirname(__file__), "clip_data_03_seg"),
-        os.path.join(os.path.dirname(__file__), "clip_data_04_seg_numBricks=7"),
+        os.path.join(os.path.dirname(__file__), "clip_data_05_pairs_seg_numBricks=7"),
+        os.path.join(os.path.dirname(__file__), "clip_data_06_pairs_seg_numBricks=6"),
         # os.path.join(os.path.dirname(__file__), "keyframes_8"),
         # os.path.join(os.path.dirname(__file__), "keyframes_9"),
     ]
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             os.path.join(dataset_folder, "keyframe_images.data"),
             dtype=np.uint8,
             mode='r',
-            shape=(info["dataset"]["total_num_images"], 3, *img_res)
+            shape=(2, info["dataset"]["total_num_images"], 3, *img_res)
         )
         images.append(image_arr)
 
@@ -63,14 +63,17 @@ if __name__ == "__main__":
         filename=os.path.join(output_folder, "keyframe_images.data"),
         dtype=np.uint8,
         mode="w+",
-        shape=(total_num_images, 3, 300, 300),
+        shape=(2, total_num_images, 3, 300, 300),
     )
-    merged_images[0:images[0].shape[0]] = images[0]
-    counter = images[0].shape[0]
     for i in range(1, len(infos)):
         merge_dataset_info_1_into_info_2(merged_info, infos[i], prefix=f"{i}_")
-        merged_images[counter:counter+images[i].shape[0]] = images[i]
-        counter += images[i].shape[0]
+
+    for p in range(2):
+        merged_images[p][0:images[0][p].shape[0]] = images[0][p]
+        counter = images[0][p].shape[0]
+        for i in range(1, len(infos)):
+            merged_images[p][counter:counter+images[i][p].shape[0]] = images[i][p]
+            counter += images[i][p].shape[0]
 
     merged_images.flush()
     # depths.flush()

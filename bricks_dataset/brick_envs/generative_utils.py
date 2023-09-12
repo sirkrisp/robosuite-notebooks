@@ -64,13 +64,14 @@ def generate_instruction(used_bricks: list[int], unused_bricks: list[int],
     return instruction
 
 
-def generate_instructions(brick_shapes: dict[int, tuple[int, int, int]]):
-    used_bricks = [0]
+def generate_instructions(brick_shapes: dict[int, tuple[int, int, int]], base_brick_idx = None):
+    base_brick_idx = base_brick_idx if base_brick_idx is not None else np.random.choice(list(brick_shapes.keys()))
+    used_bricks = [base_brick_idx]
     unused_bricks = list(brick_shapes.keys())
-    unused_bricks.remove(0)
+    unused_bricks.remove(base_brick_idx)
 
     mask3d = np.zeros((100, 100, 100), dtype=np.uint8)
-    brick_locations = {0: (50, 50, 0)}
+    brick_locations = {base_brick_idx: (50, 50, 0)}
 
     instructions = []
 

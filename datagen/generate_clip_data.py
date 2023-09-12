@@ -15,7 +15,7 @@ from datagen.datagen_utils import NpEncoder
 
 if __name__ == "__main__":
 
-    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_04_seg_numBricks=7")
+    output_folder = os.path.join(os.path.dirname(__file__), "clip_data_07_pairs_seg_numBricks=6")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -33,15 +33,18 @@ if __name__ == "__main__":
     # envs = []
 
     # generative env params
-    num_bricks = 7  # does not include base brick
-    total_num_pins = (1, 27, 1) # NOTE there will will be binom(27-1, 6-1) = 65780 possible brick combinations
+    num_bricks = 6  # does not include base brick
+    # NOTE there will be binom(27-1, 6-1) = 65780 possible brick combinations
+    # TODO this number still includes combinations with same shapes (would only work if all bricks have different colors)
+    total_num_pins = (1, 27, 1) 
     base_shape = (4, 4)
     show_segments = True
 
     # sample params
-    total_num_env_samples = 1000
+    total_num_env_samples = 100
     num_colors_per_env = 1 # corresponds to num samples per task env
     sample_colors = False
+    only_initial_image = True
 
     # total_num_instructions = 0
     # for i in range(len(tasks)):
@@ -50,10 +53,11 @@ if __name__ == "__main__":
     #     total_num_instructions += env.num_instructions
     #     # env.close()
 
-    total_num_instructions = total_num_env_samples * num_colors_per_env * num_bricks
+    # total_num_instructions = total_num_env_samples * num_colors_per_env * num_bricks
     # we add +1 for the initial image
     # total_num_images = (total_num_instructions + len(tasks)) * num_colors_per_env
-    total_num_images = total_num_env_samples * num_colors_per_env * (num_bricks + 1)
+    # TODO maybe rename
+    total_num_images = total_num_env_samples * num_colors_per_env * (1 if only_initial_image else (num_bricks + 1))
     print("total_num_images: ", total_num_images)
 
     img_res = [300, 300]
@@ -61,7 +65,7 @@ if __name__ == "__main__":
         filename=os.path.join(output_folder, "keyframe_images.data"),
         dtype=np.uint8,
         mode="w+",
-        shape=(total_num_images, 3, *img_res),
+        shape=(2, total_num_images, 3, *img_res),
     )
 
     # TODO add versioning
@@ -129,21 +133,24 @@ if __name__ == "__main__":
                 "keyframes_start_index": keyframes_start_index
             })
             env.set_brick_colors(brick_colors)
-            while True:
-                # sample task
-                try:
-                    env.reset()
-                    break
-                except:
-                    pass
-            # sample keyframe data
-            keyframe_data = env.get_keyframe_data(img_resolution=(img_res[0], img_res[1]), camera_name="frontview")
-            # save task_data
-            images[keyframes_start_index:keyframes_start_index + num_instructions + 1] = \
-                np.moveaxis(keyframe_data['images'], 3, 1).astype(np.uint8)
-            # depths[img_start_index:img_start_index+num_instructions+1] = keyframe_data['depths']
+            num_key_frames = 1 if only_initial_image else num_instructions + 1
 
-            keyframes_start_index += num_instructions + 1
+            for p in range(2):
+                while True:
+                    # sample task
+                    try:
+                        env.reset()
+                        break
+                    except:
+                        pass
+                # sample keyframe data
+                keyframe_data = env.get_keyframe_data(img_resolution=(img_res[0], img_res[1]), camera_name="frontview", only_initial=only_initial_image)
+                # save task_data
+                images[p][keyframes_start_index:keyframes_start_index + num_key_frames] = \
+                    np.moveaxis(keyframe_data['images'], 3, 1).astype(np.uint8)
+                # depths[img_start_index:img_start_index+num_instructions+1] = keyframe_data['depths']
+
+            keyframes_start_index += num_key_frames
 
         task_name = f"task_{i}"
         info["tasks"][task_name] = {

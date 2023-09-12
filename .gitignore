@@ -115,3 +115,5 @@ mjkey.txt
 /datagen/keyframes_2/
 /datagen/keyframes**/
 /datagen/clip_data**/
+/datagen/clip_contrastive**/
+/datagen/generated
